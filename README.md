@@ -1,22 +1,68 @@
 # godot-dev-mcp
 
 [![CI](https://github.com/DLeungDL/godot-dev-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/DLeungDL/godot-dev-mcp/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.2.0-informational.svg)](https://github.com/DLeungDL/godot-dev-mcp)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg)](https://www.python.org/downloads/)
+[![Godot 4.7.1 Mono](https://img.shields.io/badge/godot-4.7.1%20Mono-478CBF.svg)](https://godotengine.org/)
+[![MCP stdio](https://img.shields.io/badge/MCP-stdio-555555.svg)](https://modelcontextprotocol.io/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-`godot-dev-mcp` 是一個安全、可組合的 Godot MCP（Model Context Protocol）開發閘道，提供場景建構、唯讀執行期診斷與外部驗證整合。核心套件適用於一般 Godot 專案；Grand Sire 僅是預設關閉的選用擴充，不是產品名稱或必要相依項目。
+Safe, composable **MCP** (Model Context Protocol) gateway for **Godot**: scene authoring, read-only runtime diagnostics, and allowlisted verification.
+
+`godot-dev-mcp` 是一個安全、可組合的 Godot MCP 開發閘道（gateway），提供場景建構、唯讀執行期診斷與外部驗證整合。核心套件適用於一般 Godot 專案；**Grand Sire 只是預設關閉的選用擴充**，不是產品名稱，也不是必要相依項目。
 
 目前版本為 `0.2.0`。Python 需求為 3.11 以上；GDScript 外掛已使用 Godot 4.7.1 Mono 驗證。
+
+## 目錄
+
+- [這是什麼](#這是什麼)
+- [架構](#架構)
+- [能力邊界](#能力邊界)
+- [快速開始](#快速開始)
+- [Observer 連線](#observer-連線)
+- [工具](#工具)
+- [專案設定與 VERIFY](#專案設定與-verify)
+- [驗證狀態](#驗證狀態)
+- [安全邊界](#安全邊界)
+- [授權與來源](#授權與來源)
+
+## 這是什麼
+
+`godot-dev-mcp` 讓 MCP 用戶端（例如 Codex）用結構化工具檢查與修改 Godot 專案，而不是猜測 `.tscn` 格式或執行任意指令。
+
+| 你可以用它做 | 它故意不做 |
+|---|---|
+| 檢查 scene、node、resource、signal、script | 任意 shell command |
+| 以 dry-run 預覽單一場景屬性修改 | 任意檔案讀取或 runtime 寫入 |
+| 讀取 Editor／遊戲 scene tree、日誌、截圖與效能 | 對非 loopback 位址開放觀察通道 |
+| 執行設定檔允許的測試與 Stagehand scenario | 把 Grand Sire 綁進通用核心 |
+
+MCP Server 使用標準 **stdio transport**：每行一個 UTF-8 JSON-RPC 訊息，支援 request、notification 與 batch，且不會在 stdout 寫入非協定內容。
+
+## 架構
+
+```mermaid
+flowchart LR
+  Client["MCP Client<br/>Codex / Claude"] -->|stdio JSON-RPC| Server["godot-dev-mcp<br/>Python 3.11+"]
+  Server -->|"AUTHOR: inspect / dry-run patch"| Project["Godot project<br/>.tscn .gd .tres"]
+  Server -->|"OBSERVE: HTTP GET loopback"| Editor["Editor Observer<br/>127.0.0.1:7331"]
+  Server -->|"OBSERVE: HTTP GET loopback"| Runtime["Runtime Observer<br/>127.0.0.1:7332"]
+  Server -->|"VERIFY: allowlisted argv"| Checks["project checks<br/>Stagehand adapter"]
+  Addon["addons/godot_dev_mcp"] --> Editor
+  Addon --> Runtime
+```
 
 ## 能力邊界
 
 | 分層 | 用途 | 寫入行為 |
 |---|---|---|
-| AUTHOR | 檢查 scene、node、resource、signal、script，並修改單一場景屬性 | 修改預設為 dry-run，必須明確停用 dry-run 才會寫入 |
-| OBSERVE | 讀取 Editor／遊戲 scene tree、Node property、效能、日誌與截圖 | 唯讀，只接受 loopback HTTP GET |
-| VERIFY | 執行設定檔允許的測試命令，整合 Stagehand、JUnit 與 visual diff | 只執行明確允許的 argument array，不經 shell |
+| **AUTHOR** | 檢查 scene、node、resource、signal、script，並修改單一場景屬性 | 修改預設為 dry-run，必須明確停用 dry-run 才會寫入 |
+| **OBSERVE** | 讀取 Editor／遊戲 scene tree、Node property、效能、日誌與截圖 | 唯讀，只接受 loopback HTTP GET |
+| **VERIFY** | 執行設定檔允許的測試命令，整合 Stagehand、JUnit 與 visual diff | 只執行明確允許的 argument array，不經 shell |
 
-MCP Server 使用標準 stdio transport：每行一個 UTF-8 JSON-RPC 訊息，支援 request、notification 與 batch，且不會在 stdout 寫入非協定內容。
+## 快速開始
 
-## 安裝
+### 1. 安裝 Python 套件
 
 ```powershell
 git clone https://github.com/DLeungDL/godot-dev-mcp.git
@@ -25,13 +71,15 @@ python -m pip install -e .
 python -m unittest discover -s tests -v
 ```
 
-將本儲存庫的 `addons/godot_dev_mcp` 複製到目標 Godot 專案的 `addons/`，然後在 Godot 中開啟 **Project Settings → Plugins**，啟用 **godot-dev-mcp Observer**。
+### 2. 啟用 Godot 外掛
+
+將本儲存庫的 [`addons/godot_dev_mcp`](addons/godot_dev_mcp) 複製到目標 Godot 專案的 `addons/`，然後在 Godot 中開啟 **Project Settings → Plugins**，啟用 **godot-dev-mcp Observer**。
 
 外掛啟用後會自動加入 `GodotDevMCPRuntimeObserver` autoload。第一次安裝或更新外掛後，請重新啟動 Godot Editor，確保 Observer 在日常工作階段載入。
 
-## 啟動 MCP Server
+### 3. 啟動 MCP Server
 
-檢查 Godot Editor 中的場景樹時使用預設 Editor Observer：
+檢查 Godot Editor 中的場景樹時，使用預設 Editor Observer：
 
 ```powershell
 python -m godot_dev_mcp.server --project "C:\path\to\godot-project"
@@ -45,7 +93,7 @@ python -m godot_dev_mcp.server `
   --bridge-url "http://127.0.0.1:7332"
 ```
 
-Codex 設定範例：
+### 4. 接到 Codex
 
 ```toml
 [mcp_servers.godot_dev]
@@ -161,6 +209,8 @@ Runtime Observer 使用 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning
 
 Runtime Observer 亦已使用 Godot 官方 [`2d/dodge_the_creeps`](https://github.com/godotengine/godot-demo-projects/tree/master/2d/dodge_the_creeps) demo 驗證，可讀取真實遊戲 scene tree、效能 monitor 與結構化 runtime errors。
 
+第 2 版整合路線圖見 [Issue #1](https://github.com/DLeungDL/godot-dev-mcp/issues/1)。
+
 ## 安全邊界
 
 - 專案路徑會以 resolved path 驗證並拒絕 path traversal。
@@ -173,3 +223,4 @@ Runtime Observer 亦已使用 Godot 官方 [`2d/dodge_the_creeps`](https://githu
 ## 授權與來源
 
 本專案使用 MIT License，並維持 clean-room 實作。外部專案的介面評估與授權說明見 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
