@@ -117,6 +117,18 @@ class CoreTests(unittest.TestCase):
             with self.assertRaises(ToolError):
                 self.tools.runtime_snapshot(**kwargs)
 
+    def test_runtime_errors_and_resource_leaks_filter_structured_logs(self):
+        entries = [
+            {"level": "info", "message": "ready"},
+            {"level": "warning", "message": "RID allocations still in use"},
+            {"level": "error", "message": "script failed"},
+        ]
+        with patch.object(self.tools, "runtime_logs", return_value={"entries": entries}):
+            errors = self.tools.runtime_errors()
+            leaks = self.tools.resource_leaks()
+        self.assertEqual([entry["level"] for entry in errors["entries"]], ["warning", "error"])
+        self.assertEqual(leaks, {"entries": [entries[1]], "count": 1})
+
     def test_grand_sire_tools_are_opt_in(self):
         (self.root / "godot-dev-mcp.json").write_text(json.dumps({"extensions": ["grand_sire"], "checks": {}}), encoding="utf-8")
         listed = dispatch(self.tools, {"jsonrpc": "2.0", "id": 4, "method": "tools/list"})
@@ -128,11 +140,19 @@ class CoreTests(unittest.TestCase):
     def test_runtime_observer_addon_contract_is_packaged(self):
         repository = Path(__file__).resolve().parents[1]
         runtime_script = repository / "addons" / "godot_dev_mcp" / "runtime_observer.gd"
+        logger_script = repository / "addons" / "godot_dev_mcp" / "runtime_logger.gd"
         self.assertTrue(runtime_script.is_file())
+        self.assertTrue(logger_script.is_file())
         runtime_source = runtime_script.read_text(encoding="utf-8")
+        logger_source = logger_script.read_text(encoding="utf-8")
         self.assertIn('_server.listen(_port, "127.0.0.1")', runtime_source)
         self.assertIn('"scope": "game"', runtime_source)
         self.assertIn("OS.is_debug_build()", runtime_source)
+        self.assertIn("OS.add_logger(_runtime_logger)", runtime_source)
+        self.assertIn("OS.remove_logger(_runtime_logger)", runtime_source)
+        self.assertIn("extends Logger", logger_source)
+        self.assertIn("Mutex.new()", logger_source)
+        self.assertIn("MAX_PENDING_ENTRIES", logger_source)
         project = (repository / "project.godot").read_text(encoding="utf-8")
         self.assertIn('GodotDevMCPRuntimeObserver="*res://addons/godot_dev_mcp/runtime_observer.gd"', project)
 

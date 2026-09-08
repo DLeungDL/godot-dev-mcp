@@ -1,5 +1,6 @@
 extends Node
 
+const RuntimeLogger = preload("res://addons/godot_dev_mcp/runtime_logger.gd")
 const MAX_LOG_ENTRIES: int = 500
 const DEFAULT_SNAPSHOT_LIMIT: int = 100
 const MAX_SNAPSHOT_LIMIT: int = 500
@@ -21,6 +22,12 @@ var _server: TCPServer = TCPServer.new()
 var _clients: Array[StreamPeerTCP] = []
 var _logs: Array[Dictionary] = []
 var _port: int = 7332
+var _runtime_logger: Logger
+
+
+func _init() -> void:
+	_runtime_logger = RuntimeLogger.new()
+	OS.add_logger(_runtime_logger)
 
 
 func _ready() -> void:
@@ -38,11 +45,15 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if _runtime_logger != null:
+		OS.remove_logger(_runtime_logger)
+		_runtime_logger = null
 	_server.stop()
 	_clients.clear()
 
 
 func _process(_delta: float) -> void:
+	_drain_runtime_logs()
 	if _server.is_connection_available():
 		var connection: StreamPeerTCP = _server.take_connection()
 		if connection != null:
@@ -207,6 +218,27 @@ func _node_page(root: Node, offset: int, limit: int, max_depth: int) -> Dictiona
 
 
 func _log(level: String, message: String) -> void:
-	_logs.append({"time_msec": Time.get_ticks_msec(), "level": level, "message": message})
+	_append_log({"time_msec": Time.get_ticks_msec(), "level": level, "message": message, "source": "observer", "kind": "message"})
+
+
+func _drain_runtime_logs() -> void:
+	if _runtime_logger == null:
+		return
+	var batch: Dictionary = _runtime_logger.drain()
+	var dropped: int = int(batch.get("dropped", 0))
+	if dropped > 0:
+		_append_log({
+			"time_msec": Time.get_ticks_msec(),
+			"level": "warning",
+			"message": "godot-dev-mcp runtime logger dropped %d pending entries" % dropped,
+			"source": "observer",
+			"kind": "overflow",
+		})
+	for entry: Dictionary in batch.get("entries", []):
+		_append_log(entry)
+
+
+func _append_log(entry: Dictionary) -> void:
+	_logs.append(entry)
 	if _logs.size() > MAX_LOG_ENTRIES:
 		_logs.pop_front()
