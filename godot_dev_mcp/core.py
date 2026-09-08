@@ -136,8 +136,23 @@ class GodotTools:
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise ToolError(f"Godot observation bridge unavailable: {exc}") from exc
 
-    def runtime_snapshot(self, monitors: list[str] | None = None) -> dict[str, Any]:
-        return self._bridge_json("/snapshot", {"monitors": ",".join(monitors)} if monitors else None)
+    def runtime_snapshot(
+        self,
+        monitors: list[str] | None = None,
+        offset: int = 0,
+        limit: int = 100,
+        max_depth: int = 8,
+    ) -> dict[str, Any]:
+        if not 0 <= offset <= 100000:
+            raise ToolError("Snapshot offset must be between 0 and 100000")
+        if not 1 <= limit <= 500:
+            raise ToolError("Snapshot limit must be between 1 and 500")
+        if not 0 <= max_depth <= 16:
+            raise ToolError("Snapshot max_depth must be between 0 and 16")
+        query = {"offset": str(offset), "limit": str(limit), "max_depth": str(max_depth)}
+        if monitors:
+            query["monitors"] = ",".join(monitors)
+        return self._bridge_json("/snapshot", query)
 
     def runtime_property(self, node_path: str, property_name: str) -> dict[str, Any]:
         if not node_path.startswith("/") or not property_name:
