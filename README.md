@@ -9,7 +9,7 @@
 
 Safe, composable **MCP** (Model Context Protocol) gateway for **Godot**: scene authoring, read-only runtime diagnostics, and allowlisted verification.
 
-`godot-dev-mcp` 是一個安全、可組合的 Godot MCP 開發閘道（gateway），提供場景建構、唯讀執行期診斷與外部驗證整合。核心套件適用於一般 Godot 專案；**Grand Sire 只是預設關閉的選用擴充**，不是產品名稱，也不是必要相依項目。
+`godot-dev-mcp` 是一個安全、可組合的 Godot MCP 開發閘道（gateway），提供場景建構、唯讀執行期診斷與外部驗證整合。核心套件適用於一般 Godot 專案，不綁定特定遊戲。
 
 目前版本為 `0.2.0`。Python 需求為 3.11 以上；GDScript 外掛已使用 Godot 4.7.1 Mono 驗證。
 
@@ -35,7 +35,7 @@ Safe, composable **MCP** (Model Context Protocol) gateway for **Godot**: scene a
 | 檢查 scene、node、resource、signal、script | 任意 shell command |
 | 以 dry-run 預覽單一場景屬性修改 | 任意檔案讀取或 runtime 寫入 |
 | 讀取 Editor／遊戲 scene tree、日誌、截圖與效能 | 對非 loopback 位址開放觀察通道 |
-| 執行設定檔允許的測試與 Stagehand scenario | 把 Grand Sire 綁進通用核心 |
+| 執行設定檔允許的測試與 Stagehand scenario | 把特定遊戲專案綁進通用核心 |
 
 MCP Server 使用標準 **stdio transport**：每行一個 UTF-8 JSON-RPC 訊息，支援 request、notification 與 batch，且不會在 stdout 寫入非協定內容。
 
@@ -138,8 +138,6 @@ Runtime Observer 使用 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning
 
 ## 工具
 
-### 核心工具
-
 | 分層 | 工具 |
 |---|---|
 | AUTHOR | `godot_project_info`, `godot_scene_inspect`, `godot_scene_patch`, `godot_resource_inspect`, `godot_script_diagnostics` |
@@ -156,24 +154,6 @@ Runtime Observer 使用 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning
 - 使用 `next_offset` 取得下一頁
 - `max_depth` 最大為 `16`
 - `offset` 最大為 `100000`
-
-### Grand Sire 選用擴充
-
-只有在 `godot-dev-mcp.json` 設定以下內容後，八個 `gs_*` 工具才會加入工具目錄：
-
-```json
-{
-  "extensions": ["grand_sire"]
-}
-```
-
-| 類型 | 工具 |
-|---|---|
-| 測試 | `gs_test_auction`, `gs_run_m2`, `gs_run_pvp`, `gs_run_replay_determinism` |
-| 診斷 | `gs_runtime_errors`, `gs_resource_leaks` |
-| 驗證 | `gs_validate_scene`, `gs_validate_autoload` |
-
-其他 Godot 專案不需要啟用或認識這個擴充。
 
 ## 專案設定與 VERIFY
 
@@ -197,7 +177,7 @@ Runtime Observer 使用 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning
 - 命令必須是非空字串陣列，以 `shell=false` 啟動。
 - timeout 範圍為 1–900 秒。
 - Stagehand 維持獨立 adapter；本專案只傳入 scenario 並解析結構化產物。
-- Auction UI 範例位於 [`examples/auction-ui.stagehand.json`](examples/auction-ui.stagehand.json)。
+- Stagehand 情境範例位於 [`examples/auction-ui.stagehand.json`](examples/auction-ui.stagehand.json)。
 
 ## 驗證狀態
 
@@ -218,7 +198,7 @@ Runtime Observer 亦已使用 Godot 官方 [`2d/dodge_the_creeps`](https://githu
 - Runtime property 只允許引擎 property，不暴露 script-defined property。
 - 所有列表、程序輸出、tree depth、snapshot page 與 log buffer 均有界限。
 - 不提供任意 shell command、任意檔案讀取或 runtime 寫入介面。
-- Grand Sire 擴充預設關閉，通用核心不依賴專案專用程式碼。
+- 專案專用擴充預設關閉，通用核心不依賴特定遊戲程式碼。
 
 ## 授權與來源
 
