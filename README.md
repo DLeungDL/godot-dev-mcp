@@ -146,7 +146,7 @@ Runtime Observer 使用 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning
 | OBSERVE | `godot_runtime_snapshot`, `godot_runtime_property`, `godot_runtime_logs`, `godot_runtime_screenshot`, `godot_runtime_errors`, `godot_resource_leaks` |
 | VERIFY | `godot_run_check`, `godot_stagehand_scenario`, `godot_validate_scene`, `godot_validate_autoload` |
 
-`godot_scene_patch` 的 `dry_run` 預設為 `true`。只有明確傳入 `false` 才會寫入單一 `.tscn` property；回傳結果包含 before／after 變更摘要。
+`godot_scene_patch` 的 `dry_run` 預設為 `true`。只有明確傳入 `false` 才會寫入單一 `.tscn` property；節點 selector 可使用名稱、相對路徑或完整 scene path，名稱不唯一時會拒絕修改。替換既有多行 property 時會移除完整舊值，回傳結果包含解析後的 `scene_path` 與 before／after 變更摘要。
 
 `godot_scene_inspect` 會回傳有界限的 `structured_nodes`，包含節點名稱、型別、parent、scene path 與最多 100 個 property。多行 property 會保留完整序列化格式；每個值最多 4,096 字元、每個節點最多 32,768 字元、整個場景最多 131,072 字元，截斷項目會列在 `truncated_properties`。傳入選用的 `node` selector，可依名稱或 scene path 精確取得 `selected_node`；名稱不唯一時必須改用完整路徑。
 

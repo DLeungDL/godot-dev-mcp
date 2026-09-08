@@ -13,7 +13,7 @@ from typing import Any
 
 
 _TSCN_ATTRIBUTE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=("(?:\\.|[^"\\])*"|[^\s\]]+)')
-_TSCN_PROPERTY = re.compile(r"^([A-Za-z_][A-Za-z0-9_./:]*)\s*=\s*(.*)$")
+_TSCN_PROPERTY = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_./:]*)\s*=\s*(.*)$")
 MAX_SCENE_NODE_PROPERTIES = 100
 MAX_SCENE_PROPERTY_VALUE_CHARS = 4096
 MAX_SCENE_PROPERTY_CHARS_PER_NODE = 32768
@@ -69,18 +69,7 @@ class GodotTools:
         scripts = sorted(set(re.findall(r'path="([^"]+\.(?:gd|cs))"', text)))
         selected_node = None
         if node is not None:
-            if not isinstance(node, str) or not node.strip():
-                raise ToolError("Node selector must be a non-empty string")
-            selector = node.strip().strip("/")
-            matches = [item for item in structured_nodes if selector in {
-                item["name"], item["relative_path"], item["scene_path"]
-            }]
-            if not matches:
-                raise ToolError(f"Node not found: {node}")
-            if len(matches) > 1:
-                choices = ", ".join(item["scene_path"] for item in matches[:10])
-                raise ToolError(f"Ambiguous node selector: {node}; choose one of: {choices}")
-            selected_node = matches[0]
+            selected_node = self._select_scene_node(structured_nodes, node)
         return {
             "path": path,
             "node_count": len(nodes),
@@ -142,6 +131,20 @@ class GodotTools:
         return result
 
     @staticmethod
+    def _select_scene_node(nodes: list[dict[str, Any]], selector_value: str) -> dict[str, Any]:
+        if not isinstance(selector_value, str) or not selector_value.strip():
+            raise ToolError("Node selector must be a non-empty string")
+        selector = selector_value.strip("/")
+        for field in ("scene_path", "relative_path", "name"):
+            matches = [item for item in nodes if selector == item[field]]
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
+                choices = ", ".join(item["scene_path"] for item in matches[:10])
+                raise ToolError(f"Ambiguous node selector: {selector_value}; choose one of: {choices}")
+        raise ToolError(f"Node not found: {selector_value}")
+
+    @staticmethod
     def _structured_node_properties(lines: list[str], max_chars: int) -> dict[str, Any]:
         assignments: list[tuple[str, list[str]]] = []
         current_name: str | None = None
@@ -188,25 +191,50 @@ class GodotTools:
             raise ToolError("Invalid property name")
         if not isinstance(value, str) or "\n" in value or "\r" in value or len(value) > 4096:
             raise ToolError("Value must be a single Godot resource line value (max 4096 chars)")
-        pattern = re.compile(r'^\[node\s+.*name="' + re.escape(node) + r'"(?:\s|\])')
         lines = scene.read_text(encoding="utf-8").splitlines(keepends=True)
-        start = next((i for i, line in enumerate(lines) if pattern.match(line.rstrip("\r\n"))), None)
-        if start is None:
-            raise ToolError(f"Node not found: {node}")
+        plain_lines = [line.rstrip("\r\n") for line in lines]
+        structured_nodes = self._structured_scene_nodes(plain_lines)
+        selected_node = self._select_scene_node(structured_nodes, node)
+        node_index = next(index for index, item in enumerate(structured_nodes) if item is selected_node)
+        starts = [index for index, line in enumerate(plain_lines) if line.startswith("[node ")]
+        start = starts[node_index]
         end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("[")), len(lines))
-        assignment = re.compile(r"^" + re.escape(property_name) + r"\s*=")
-        index = next((i for i in range(start + 1, end) if assignment.match(lines[i])), None)
+        assignment = re.compile(r"^(\s*)" + re.escape(property_name) + r"\s*=")
+        assignment_match = next(
+            ((i, match) for i in range(start + 1, end) if (match := assignment.match(plain_lines[i]))),
+            None,
+        )
+        index = assignment_match[0] if assignment_match is not None else None
         newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
-        replacement = f"{property_name} = {value}{newline}"
+        indentation = assignment_match[1].group(1) if assignment_match is not None else ""
+        replacement = f"{indentation}{property_name} = {value}{newline}"
         old_value = None
         if index is None:
             index = end
+            while index > start + 1 and not plain_lines[index - 1].strip():
+                index -= 1
             updated = lines[:index] + [replacement] + lines[index:]
         else:
-            old_value = lines[index].split("=", 1)[1].strip()
-            updated = [*lines]
-            updated[index] = replacement
-        summary = {"path": path, "node": node, "property": property_name, "before": old_value, "after": value}
+            value_end = next(
+                (i for i in range(index + 1, end) if _TSCN_PROPERTY.match(plain_lines[i])),
+                end,
+            )
+            while value_end > index + 1:
+                trailing_line = plain_lines[value_end - 1].strip()
+                if trailing_line and not trailing_line.startswith(";"):
+                    break
+                value_end -= 1
+            old_lines = [plain_lines[index].split("=", 1)[1], *plain_lines[index + 1:value_end]]
+            old_value = "\n".join(old_lines).strip()
+            updated = lines[:index] + [replacement] + lines[value_end:]
+        summary = {
+            "path": path,
+            "node": node,
+            "scene_path": selected_node["scene_path"],
+            "property": property_name,
+            "before": old_value,
+            "after": value,
+        }
         if not dry_run:
             scene.write_text("".join(updated), encoding="utf-8", newline="")
         return {**summary, "dry_run": dry_run, "changed": old_value != value}
