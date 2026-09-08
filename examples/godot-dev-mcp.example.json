@@ -7,8 +7,8 @@
     "replay_determinism": ["godot", "--headless", "--path", ".", "--script", "res://tests/check_replay_determinism.gd"]
   },
   "stagehand": {
-    "command": ["godot-stagehand", "run", "--junit", "artifacts/stagehand-junit.xml"],
-    "junit": "artifacts/stagehand-junit.xml",
-    "visual_diff": "artifacts/visual-diff.json"
+    "command": ["godot-stagehand", "run", "--out-dir", "stagehand-artifacts"],
+    "junit": "stagehand-artifacts/junit.xml",
+    "report": "stagehand-artifacts/report.json"
   }
 }

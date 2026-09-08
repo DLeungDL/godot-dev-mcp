@@ -43,7 +43,7 @@ cwd = "C:\\path\\to\\godot-dev-mcp"
 
 Grand Sire 擴充預設關閉。只有設定 `"extensions": ["grand_sire"]` 後，四個 `gs_*` 工具才會加入 catalog；核心套件與公開介面不依賴該擴充。
 
-Stagehand 保持為獨立 adapter。`stagehand.command` 後會附加 scenario 絕對路徑；若設定 `junit` 或 `visual_diff`，執行後會解析並回傳結構化結果。Auction 範例在 [`examples/auction-ui.stagehand.yaml`](examples/auction-ui.stagehand.yaml)。
+Stagehand 保持為獨立 adapter。`stagehand.command` 後會附加 scenario 絕對路徑；若設定 `junit`、`report` 或自訂 `visual_diff` JSON，執行後會解析並回傳結構化結果。情境遵循官方嚴格 JSON schema；Auction 範例在 [`examples/auction-ui.stagehand.json`](examples/auction-ui.stagehand.json)，其中 `project_path` 與 selectors 需按目標專案調整。
 
 ## 安全邊界
 

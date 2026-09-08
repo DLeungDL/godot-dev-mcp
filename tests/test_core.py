@@ -80,15 +80,17 @@ class CoreTests(unittest.TestCase):
         self.assertIsNone(result["exit_code"])
 
     def test_stagehand_junit_and_visual_diff_are_parsed(self):
-        (self.root / "scenario.yaml").write_text("name: auction\n", encoding="utf-8")
+        (self.root / "scenario.json").write_text('{"name":"auction","target":{"mode":"connect","port":1234},"steps":[]}', encoding="utf-8")
         (self.root / "junit.xml").write_text('<testsuite tests="2" failures="1" errors="0" skipped="0"/>', encoding="utf-8")
         (self.root / "visual.json").write_text('{"changed_pixels": 12}', encoding="utf-8")
+        (self.root / "report.json").write_text('{"status":"failed","exit_code":5}', encoding="utf-8")
         config = {"stagehand": {"command": [sys.executable, "-c", "print('scenario complete')", "--"],
-                                "junit": "junit.xml", "visual_diff": "visual.json"}}
+                                "junit": "junit.xml", "visual_diff": "visual.json", "report": "report.json"}}
         (self.root / "godot-dev-mcp.json").write_text(json.dumps(config), encoding="utf-8")
-        result = self.tools.stagehand_scenario("scenario.yaml")
+        result = self.tools.stagehand_scenario("scenario.json")
         self.assertEqual(result["junit"]["tests"], 2)
         self.assertEqual(result["visual_diff"]["changed_pixels"], 12)
+        self.assertEqual(result["stagehand_report"]["exit_code"], 5)
 
     def test_resource_script_and_autoload_diagnostics(self):
         self.assertEqual(self.tools.resource_inspect("main.tscn")["ext_resources"][0].startswith("[ext_resource"), True)

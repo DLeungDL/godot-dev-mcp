@@ -190,7 +190,7 @@ class GodotTools:
         command = settings.get("command") if isinstance(settings, dict) else None
         if not command:
             raise ToolError("Stagehand command is not configured")
-        scenario_path = self._project_file(scenario, (".json", ".yaml", ".yml"))
+        scenario_path = self._project_file(scenario, ".json")
         if not scenario_path.is_file():
             raise ToolError(f"Scenario not found: {scenario}")
         result = {"scenario": scenario, **self._run([*command, str(scenario_path)], min(max(timeout, 1), 900))}
@@ -211,6 +211,14 @@ class GodotTools:
                     result["visual_diff"] = json.loads(visual_path.read_text(encoding="utf-8"))
                 except json.JSONDecodeError as exc:
                     result["visual_diff_error"] = str(exc)
+        report = settings.get("report")
+        if report:
+            report_path = self._project_file(report, ".json")
+            if report_path.is_file():
+                try:
+                    result["stagehand_report"] = json.loads(report_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as exc:
+                    result["stagehand_report_error"] = str(exc)
         return result
 
     def runtime_errors(self) -> dict[str, Any]:
