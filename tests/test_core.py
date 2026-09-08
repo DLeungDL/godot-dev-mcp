@@ -79,10 +79,50 @@ class CoreTests(unittest.TestCase):
     def test_scene_patch_dry_run_and_apply(self):
         result = self.tools.scene_patch("main.tscn", "Label", "text", '"New"')
         self.assertTrue(result["dry_run"])
+        self.assertEqual(result["scene_path"], "Main/Label")
         self.assertNotIn('text = "New"', (self.root / "main.tscn").read_text(encoding="utf-8"))
         result = self.tools.scene_patch("main.tscn", "Label", "text", '"New"', dry_run=False)
         self.assertFalse(result["dry_run"])
         self.assertIn('text = "New"', (self.root / "main.tscn").read_text(encoding="utf-8"))
+
+    def test_scene_patch_replaces_complete_multiline_property(self):
+        scene = self.root / "main.tscn"
+        scene.write_text(
+            scene.read_text(encoding="utf-8").replace(
+                '[connection signal="ready"', '; keep this comment\n[connection signal="ready"'
+            ),
+            encoding="utf-8",
+        )
+        result = self.tools.scene_patch(
+            "main.tscn", "Main/Label", "metadata/config", '{"enabled": false}', dry_run=False
+        )
+        self.assertEqual(result["before"], '{\n"enabled": true,\n"items": [1, 2]\n}')
+        contents = scene.read_text(encoding="utf-8")
+        self.assertIn('metadata/config = {"enabled": false}', contents)
+        self.assertNotIn('"items": [1, 2]', contents)
+        self.assertIn('; keep this comment', contents)
+        self.assertIn('[connection signal="ready"', contents)
+
+    def test_scene_patch_rejects_ambiguous_name_and_accepts_scene_path(self):
+        (self.root / "duplicate.tscn").write_text(
+            '[gd_scene format=3]\n\n'
+            '[node name="Main" type="Node"]\n'
+            '[node name="PanelA" type="Control" parent="."]\n'
+            '[node name="Label" type="Label" parent="PanelA"]\ntext = "A"\n'
+            '[node name="PanelB" type="Control" parent="."]\n'
+            '[node name="Label" type="Label" parent="PanelB"]\ntext = "B"\n',
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ToolError, "Ambiguous node selector"):
+            self.tools.scene_patch("duplicate.tscn", "Label", "text", '"Updated"')
+
+        result = self.tools.scene_patch(
+            "duplicate.tscn", "Main/PanelB/Label", "text", '"Updated"', dry_run=False
+        )
+        self.assertEqual(result["scene_path"], "Main/PanelB/Label")
+        contents = (self.root / "duplicate.tscn").read_text(encoding="utf-8")
+        self.assertEqual(contents.count('text = "A"'), 1)
+        self.assertEqual(contents.count('text = "Updated"'), 1)
 
     def test_path_escape_and_bad_suffix_are_rejected(self):
         with self.assertRaises(ToolError):
