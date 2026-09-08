@@ -26,6 +26,8 @@ cwd = "C:\\path\\to\\godot-dev-mcp"
 
 將 `addons/godot_dev_mcp` 複製到目標專案的 `addons/`，再於 Project Settings → Plugins 啟用。Observer 只接受 `127.0.0.1:7331` 上的 `GET`，不提供 runtime 寫入介面。
 
+啟用外掛時會加入 `GodotDevMCPRuntimeObserver` autoload。Editor Observer 使用 `127.0.0.1:7331`；遊戲執行時的 Runtime Observer 使用 `127.0.0.1:7332`，可透過 `godot_dev_mcp/runtime_port` 專案設定更改。觀察真正的遊戲 scene tree 時，啟動 MCP Server 加上 `--bridge-url http://127.0.0.1:7332`。Runtime Observer 預設只在 debug build 啟動；release build 必須明確設定 `godot_dev_mcp/allow_release_observer=true`，避免意外隨正式遊戲啟用。
+
 ## 工具
 
 | 分層 | 工具 |

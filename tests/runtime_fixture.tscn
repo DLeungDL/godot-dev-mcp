@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[node name="RuntimeFixture" type="Node"]
+
+[node name="ObservedLabel" type="Label" parent="."]
+text = "runtime-observer-ready"
