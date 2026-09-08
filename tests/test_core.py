@@ -138,6 +138,40 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(contents.count('text = "A"'), 1)
         self.assertEqual(contents.count('text = "Updated"'), 1)
 
+    def test_scene_selector_preserves_significant_trailing_whitespace(self):
+        (self.root / "whitespace.tscn").write_text(
+            '[gd_scene format=3]\n\n'
+            '[node name="Root" type="Node"]\n'
+            '[node name="Label " type="Label" parent="."]\ntext = "Old"\n',
+            encoding="utf-8",
+        )
+        result = self.tools.scene_patch(
+            "whitespace.tscn", "Root/Label ", "text", '"New"', dry_run=False
+        )
+        self.assertEqual(result["scene_path"], "Root/Label ")
+        self.assertIn(
+            'text = "New"', (self.root / "whitespace.tscn").read_text(encoding="utf-8")
+        )
+
+    def test_scene_selector_prefers_exact_scene_path_for_root(self):
+        (self.root / "same-name.tscn").write_text(
+            '[gd_scene format=3]\n\n'
+            '[node name="Main" type="Node"]\nprocess_mode = 0\n'
+            '[node name="Main" type="Node" parent="."]\nprocess_mode = 1\n',
+            encoding="utf-8",
+        )
+        root_result = self.tools.scene_patch(
+            "same-name.tscn", "Main", "process_mode", "2", dry_run=False
+        )
+        child_result = self.tools.scene_patch(
+            "same-name.tscn", "Main/Main", "process_mode", "3", dry_run=False
+        )
+        self.assertEqual(root_result["scene_path"], "Main")
+        self.assertEqual(child_result["scene_path"], "Main/Main")
+        contents = (self.root / "same-name.tscn").read_text(encoding="utf-8")
+        self.assertEqual(contents.count("process_mode = 2"), 1)
+        self.assertEqual(contents.count("process_mode = 3"), 1)
+
     def test_path_escape_and_bad_suffix_are_rejected(self):
         with self.assertRaises(ToolError):
             self.tools.scene_inspect("../escape.tscn")

@@ -134,16 +134,15 @@ class GodotTools:
     def _select_scene_node(nodes: list[dict[str, Any]], selector_value: str) -> dict[str, Any]:
         if not isinstance(selector_value, str) or not selector_value.strip():
             raise ToolError("Node selector must be a non-empty string")
-        selector = selector_value.strip().strip("/")
-        matches = [item for item in nodes if selector in {
-            item["name"], item["relative_path"], item["scene_path"]
-        }]
-        if not matches:
-            raise ToolError(f"Node not found: {selector_value}")
-        if len(matches) > 1:
-            choices = ", ".join(item["scene_path"] for item in matches[:10])
-            raise ToolError(f"Ambiguous node selector: {selector_value}; choose one of: {choices}")
-        return matches[0]
+        selector = selector_value.strip("/")
+        for field in ("scene_path", "relative_path", "name"):
+            matches = [item for item in nodes if selector == item[field]]
+            if len(matches) == 1:
+                return matches[0]
+            if len(matches) > 1:
+                choices = ", ".join(item["scene_path"] for item in matches[:10])
+                raise ToolError(f"Ambiguous node selector: {selector_value}; choose one of: {choices}")
+        raise ToolError(f"Node not found: {selector_value}")
 
     @staticmethod
     def _structured_node_properties(lines: list[str], max_chars: int) -> dict[str, Any]:
