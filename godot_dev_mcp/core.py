@@ -13,7 +13,7 @@ from typing import Any
 
 
 _TSCN_ATTRIBUTE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=("(?:\\.|[^"\\])*"|[^\s\]]+)')
-_TSCN_PROPERTY = re.compile(r"^([A-Za-z_][A-Za-z0-9_./:]*)\s*=\s*(.*)$")
+_TSCN_PROPERTY = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_./:]*)\s*=\s*(.*)$")
 MAX_SCENE_NODE_PROPERTIES = 100
 MAX_SCENE_PROPERTY_VALUE_CHARS = 4096
 MAX_SCENE_PROPERTY_CHARS_PER_NODE = 32768
@@ -200,10 +200,15 @@ class GodotTools:
         starts = [index for index, line in enumerate(plain_lines) if line.startswith("[node ")]
         start = starts[node_index]
         end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("[")), len(lines))
-        assignment = re.compile(r"^" + re.escape(property_name) + r"\s*=")
-        index = next((i for i in range(start + 1, end) if assignment.match(lines[i])), None)
+        assignment = re.compile(r"^(\s*)" + re.escape(property_name) + r"\s*=")
+        assignment_match = next(
+            ((i, match) for i in range(start + 1, end) if (match := assignment.match(plain_lines[i]))),
+            None,
+        )
+        index = assignment_match[0] if assignment_match is not None else None
         newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
-        replacement = f"{property_name} = {value}{newline}"
+        indentation = assignment_match[1].group(1) if assignment_match is not None else ""
+        replacement = f"{indentation}{property_name} = {value}{newline}"
         old_value = None
         if index is None:
             index = end

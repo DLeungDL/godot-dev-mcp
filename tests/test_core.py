@@ -103,6 +103,20 @@ class CoreTests(unittest.TestCase):
         self.assertIn('; keep this comment', contents)
         self.assertIn('[connection signal="ready"', contents)
 
+    def test_scene_patch_preserves_indented_property_assignments(self):
+        scene = self.root / "main.tscn"
+        scene.write_text(
+            scene.read_text(encoding="utf-8").replace(
+                'text = "Old"', '    text = "Old"\n    tooltip_text = "Keep"'
+            ),
+            encoding="utf-8",
+        )
+        result = self.tools.scene_patch("main.tscn", "Main/Label", "text", '"New"', dry_run=False)
+        self.assertEqual(result["before"], '"Old"')
+        contents = scene.read_text(encoding="utf-8")
+        self.assertIn('    text = "New"', contents)
+        self.assertIn('    tooltip_text = "Keep"', contents)
+
     def test_scene_patch_rejects_ambiguous_name_and_accepts_scene_path(self):
         (self.root / "duplicate.tscn").write_text(
             '[gd_scene format=3]\n\n'
