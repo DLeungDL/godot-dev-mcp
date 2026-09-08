@@ -28,6 +28,8 @@ cwd = "C:\\path\\to\\godot-dev-mcp"
 
 啟用外掛時會加入 `GodotDevMCPRuntimeObserver` autoload。Editor Observer 使用 `127.0.0.1:7331`；遊戲執行時的 Runtime Observer 使用 `127.0.0.1:7332`，可透過 `godot_dev_mcp/runtime_port` 專案設定更改。觀察真正的遊戲 scene tree 時，啟動 MCP Server 加上 `--bridge-url http://127.0.0.1:7332`。Runtime Observer 預設只在 debug build 啟動；release build 必須明確設定 `godot_dev_mcp/allow_release_observer=true`，避免意外隨正式遊戲啟用。
 
+Runtime Observer 會透過 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning()`、`push_error()`、script error 與 shader error。Logger 回呼使用 `Mutex` 保護待處理佇列，再於主執行緒寫入最多 500 筆的 ring buffer；`godot_runtime_errors` 與 `godot_resource_leaks` 因此可讀取真實遊戲診斷，而非只看到 Observer 自身訊息。
+
 ## 工具
 
 | 分層 | 工具 |
