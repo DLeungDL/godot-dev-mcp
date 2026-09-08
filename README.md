@@ -7,11 +7,13 @@
 [![MCP stdio](https://img.shields.io/badge/MCP-stdio-555555.svg)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
+[中文](README.md) · [English](README.en.md)
+
 Safe, composable **MCP** (Model Context Protocol) gateway for **Godot**: scene authoring, read-only runtime diagnostics, and allowlisted verification.
 
-`godot-dev-mcp` 是一個安全、可組合的 Godot MCP 開發閘道（gateway），提供場景建構、唯讀執行期診斷與外部驗證整合。核心套件適用於一般 Godot 專案，不綁定特定遊戲。
+`godot-dev-mcp` 是一個安全、可組合的 Godot MCP 開發閘道（gateway），提供場景建構、唯讀執行期診斷與外部驗證整合。
 
-目前版本為 `0.2.0`。Python 需求為 3.11 以上；GDScript 外掛已使用 Godot 4.7.1 Mono 驗證。
+目前版本為 `0.2.0`。Python 需求為 3.11 以上。
 
 ## 目錄
 
