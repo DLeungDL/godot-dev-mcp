@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -6,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from godot_dev_mcp.core import GodotTools, ToolError
-from godot_dev_mcp.server import CORE_TOOLS, dispatch
+from godot_dev_mcp.server import CORE_TOOLS, dispatch, dispatch_message
 
 
 class CoreTests(unittest.TestCase):
@@ -107,6 +108,25 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("gs_test_auction", names)
         self.assertTrue({"godot_runtime_errors", "godot_validate_autoload"} <= names)
 
+    def test_mcp_batch_executes_notifications_without_responding(self):
+        result = dispatch_message(self.tools, [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "method": "tools/call", "params": {
+                "name": "godot_scene_patch",
+                "arguments": {"path": "main.tscn", "node": "Label", "property": "text", "value": '"Notification"', "dry_run": False},
+            }},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        ])
+        self.assertIsInstance(result, list)
+        self.assertEqual([item["id"] for item in result], [1, 2])
+        self.assertIn('text = "Notification"', (self.root / "main.tscn").read_text(encoding="utf-8"))
+        self.assertIsNone(dispatch_message(self.tools, [
+            {"jsonrpc": "2.0", "method": "notifications/cancelled"}
+        ]))
+        self.assertEqual(dispatch_message(self.tools, [])["error"]["code"], -32600)
+        self.assertEqual(dispatch_message(self.tools, {"id": 9, "method": "tools/list"})["error"]["code"], -32600)
+
     def test_runtime_snapshot_forwards_bounded_pagination(self):
         with patch.object(self.tools, "_bridge_json", return_value={"nodes": []}) as bridge:
             self.tools.runtime_snapshot(["fps"], offset=20, limit=25, max_depth=4)
@@ -155,6 +175,55 @@ class CoreTests(unittest.TestCase):
         self.assertIn("MAX_PENDING_ENTRIES", logger_source)
         project = (repository / "project.godot").read_text(encoding="utf-8")
         self.assertIn('GodotDevMCPRuntimeObserver="*res://addons/godot_dev_mcp/runtime_observer.gd"', project)
+
+class MCPStdioIntegrationTests(unittest.TestCase):
+    def test_server_process_completes_stdio_json_rpc_lifecycle(self):
+        repository = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / "project.godot").write_text('[application]\nconfig/name="stdio-test"\n', encoding="utf-8")
+            scene = project / "main.tscn"
+            scene.write_text('[gd_scene format=3]\n\n[node name="Main" type="Node"]\n', encoding="utf-8")
+            requests = [
+                {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                    "protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}
+                }},
+                {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                {"jsonrpc": "2.0", "method": "tools/call", "params": {
+                    "name": "godot_scene_patch", "arguments": {
+                        "path": "main.tscn", "node": "Main", "property": "process_mode",
+                        "value": "3", "dry_run": False,
+                    }
+                }},
+                {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+                {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {
+                    "name": "godot_project_info", "arguments": {}
+                }},
+                {"jsonrpc": "2.0", "id": 4, "method": "unknown/method"},
+            ]
+            input_lines = [json.dumps(request) for request in requests]
+            input_lines.append("{malformed json")
+            completed = subprocess.run(
+                [sys.executable, "-m", "godot_dev_mcp.server", "--project", str(project)],
+                cwd=repository,
+                input="\n".join(input_lines) + "\n",
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            scene_text = scene.read_text(encoding="utf-8")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stderr, "")
+        responses = [json.loads(line) for line in completed.stdout.splitlines()]
+        self.assertEqual([item["id"] for item in responses], [1, 2, 3, 4, None])
+        self.assertEqual(responses[0]["result"]["serverInfo"]["name"], "godot-dev-mcp")
+        self.assertEqual(len(responses[1]["result"]["tools"]), len(CORE_TOOLS))
+        project_info = json.loads(responses[2]["result"]["content"][0]["text"])
+        self.assertEqual(project_info["config_preview"], '[application]\nconfig/name="stdio-test"\n')
+        self.assertEqual(responses[3]["error"]["code"], -32601)
+        self.assertEqual(responses[4]["error"]["code"], -32700)
+        self.assertIn("process_mode = 3", scene_text)
 
 
 if __name__ == "__main__":

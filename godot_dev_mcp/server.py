@@ -67,14 +67,18 @@ def dispatch(tools: GodotTools, message: dict[str, Any]) -> dict[str, Any] | Non
     if not isinstance(message, dict):
         return response(None, error={"code": -32600, "message": "Invalid Request"})
     method, request_id = message.get("method"), message.get("id")
-    if method == "notifications/initialized":
-        return None
+    if message.get("jsonrpc") != "2.0" or not isinstance(method, str):
+        return response(request_id, error={"code": -32600, "message": "Invalid Request"})
+    is_notification = "id" not in message
     if method == "initialize":
-        return response(request_id, {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "godot-dev-mcp", "version": "0.2.0"}})
+        result = response(request_id, {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "godot-dev-mcp", "version": "0.2.0"}})
+        return None if is_notification else result
     if method == "tools/list":
-        return response(request_id, {"tools": tool_catalog(tools)})
+        result = response(request_id, {"tools": tool_catalog(tools)})
+        return None if is_notification else result
     if method != "tools/call":
-        return response(request_id, error={"code": -32601, "message": f"Method not found: {method}"})
+        result = response(request_id, error={"code": -32601, "message": f"Method not found: {method}"})
+        return None if is_notification else result
     params = message.get("params", {})
     arguments = params.get("arguments", {}) if isinstance(params, dict) else {}
     name = params.get("name") if isinstance(params, dict) else None
@@ -107,9 +111,20 @@ def dispatch(tools: GodotTools, message: dict[str, Any]) -> dict[str, Any] | Non
         if name not in handlers:
             raise ToolError(f"Unknown or disabled tool: {name}")
         content = json.dumps(handlers[name](), ensure_ascii=False, indent=2)
-        return response(request_id, {"content": [{"type": "text", "text": content}], "isError": False})
+        result = response(request_id, {"content": [{"type": "text", "text": content}], "isError": False})
+        return None if is_notification else result
     except (ToolError, KeyError, TypeError, ValueError) as exc:
-        return response(request_id, {"content": [{"type": "text", "text": str(exc)}], "isError": True})
+        result = response(request_id, {"content": [{"type": "text", "text": str(exc)}], "isError": True})
+        return None if is_notification else result
+
+
+def dispatch_message(tools: GodotTools, message: Any) -> dict[str, Any] | list[dict[str, Any]] | None:
+    if not isinstance(message, list):
+        return dispatch(tools, message)
+    if not message:
+        return response(None, error={"code": -32600, "message": "Invalid Request"})
+    results = [result for item in message if (result := dispatch(tools, item)) is not None]
+    return results or None
 
 
 def main() -> None:
@@ -120,7 +135,7 @@ def main() -> None:
     tools = GodotTools(args.project, args.bridge_url)
     for line in sys.stdin:
         try:
-            result = dispatch(tools, json.loads(line))
+            result = dispatch_message(tools, json.loads(line))
             if result is not None:
                 print(json.dumps(result, separators=(",", ":")), flush=True)
         except json.JSONDecodeError as exc:
