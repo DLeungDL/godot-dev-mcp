@@ -12,6 +12,14 @@ from pathlib import Path
 from typing import Any
 
 
+_TSCN_ATTRIBUTE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=("(?:\\.|[^"\\])*"|[^\s\]]+)')
+_TSCN_PROPERTY = re.compile(r"^([A-Za-z_][A-Za-z0-9_./:]*)\s*=\s*(.*)$")
+MAX_SCENE_NODE_PROPERTIES = 100
+MAX_SCENE_PROPERTY_VALUE_CHARS = 4096
+MAX_SCENE_PROPERTY_CHARS_PER_NODE = 32768
+MAX_SCENE_PROPERTY_CHARS_TOTAL = 131072
+
+
 class ToolError(RuntimeError):
     pass
 
@@ -48,16 +56,31 @@ class GodotTools:
             "config_preview": config[:4000],
         }
 
-    def scene_inspect(self, path: str) -> dict[str, Any]:
+    def scene_inspect(self, path: str, node: str | None = None) -> dict[str, Any]:
         scene = self._project_file(path, ".tscn")
         if not scene.is_file():
             raise ToolError(f"Scene not found: {path}")
         text = scene.read_text(encoding="utf-8")
         lines = text.splitlines()
         nodes = [line for line in lines if line.startswith("[node ")]
+        structured_nodes = self._structured_scene_nodes(lines)
         resources = [line for line in lines if line.startswith(("[ext_resource ", "[sub_resource "))]
         connections = [line for line in lines if line.startswith("[connection ")]
         scripts = sorted(set(re.findall(r'path="([^"]+\.(?:gd|cs))"', text)))
+        selected_node = None
+        if node is not None:
+            if not isinstance(node, str) or not node.strip():
+                raise ToolError("Node selector must be a non-empty string")
+            selector = node.strip().strip("/")
+            matches = [item for item in structured_nodes if selector in {
+                item["name"], item["relative_path"], item["scene_path"]
+            }]
+            if not matches:
+                raise ToolError(f"Node not found: {node}")
+            if len(matches) > 1:
+                choices = ", ".join(item["scene_path"] for item in matches[:10])
+                raise ToolError(f"Ambiguous node selector: {node}; choose one of: {choices}")
+            selected_node = matches[0]
         return {
             "path": path,
             "node_count": len(nodes),
@@ -67,7 +90,94 @@ class GodotTools:
             "resources": resources[:250],
             "connections": connections[:250],
             "scripts": scripts,
-            "truncated": any(len(items) > 250 for items in (nodes, resources, connections)),
+            "structured_nodes": structured_nodes[:250],
+            "selected_node": selected_node,
+            "truncated": len(structured_nodes) > 250 or any(len(items) > 250 for items in (nodes, resources, connections)),
+        }
+
+    @staticmethod
+    def _structured_scene_nodes(lines: list[str]) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        root_name = ""
+        scene_property_chars = 0
+        for index, line in enumerate(lines):
+            if not line.startswith("[node "):
+                continue
+            attributes: dict[str, str] = {}
+            for key, raw_value in _TSCN_ATTRIBUTE.findall(line):
+                if raw_value.startswith('"') and raw_value.endswith('"'):
+                    try:
+                        attributes[key] = json.loads(raw_value)
+                    except json.JSONDecodeError:
+                        attributes[key] = raw_value[1:-1]
+                else:
+                    attributes[key] = raw_value
+            name = attributes.get("name", "")
+            parent = attributes.get("parent")
+            if not result:
+                root_name = name
+                relative_path = name
+            elif parent in (None, "."):
+                relative_path = name
+            else:
+                relative_path = f"{parent}/{name}"
+            scene_path = root_name if not result else f"{root_name}/{relative_path}"
+            section_end = next((offset for offset in range(index + 1, len(lines)) if lines[offset].startswith("[")), len(lines))
+            node_property_limit = min(
+                MAX_SCENE_PROPERTY_CHARS_PER_NODE,
+                max(0, MAX_SCENE_PROPERTY_CHARS_TOTAL - scene_property_chars),
+            )
+            property_data = GodotTools._structured_node_properties(lines[index + 1:section_end], node_property_limit)
+            scene_property_chars += property_data["property_chars"]
+            result.append({
+                "name": name,
+                "type": attributes.get("type"),
+                "parent": parent,
+                "relative_path": relative_path,
+                "scene_path": scene_path,
+                "instance": attributes.get("instance"),
+                "owner": attributes.get("owner"),
+                **property_data,
+            })
+        return result
+
+    @staticmethod
+    def _structured_node_properties(lines: list[str], max_chars: int) -> dict[str, Any]:
+        assignments: list[tuple[str, list[str]]] = []
+        current_name: str | None = None
+        current_value: list[str] = []
+        for line in lines:
+            match = _TSCN_PROPERTY.match(line)
+            if match:
+                if current_name is not None:
+                    assignments.append((current_name, current_value))
+                current_name = match.group(1)
+                current_value = [match.group(2)]
+            elif current_name is not None:
+                current_value.append(line)
+        if current_name is not None:
+            assignments.append((current_name, current_value))
+
+        properties: dict[str, str] = {}
+        truncated_properties: list[str] = []
+        serialized_chars = 0
+        for property_name, value_lines in assignments:
+            value = "\n".join(value_lines).strip()
+            remaining = max_chars - serialized_chars
+            if len(properties) >= MAX_SCENE_NODE_PROPERTIES or remaining <= 0:
+                truncated_properties.append(property_name)
+                continue
+            value_limit = min(MAX_SCENE_PROPERTY_VALUE_CHARS, remaining)
+            properties[property_name] = value[:value_limit]
+            serialized_chars += len(properties[property_name])
+            if len(value) > value_limit:
+                truncated_properties.append(property_name)
+        return {
+            "properties": properties,
+            "property_count": len(assignments),
+            "property_chars": serialized_chars,
+            "properties_truncated": bool(truncated_properties),
+            "truncated_properties": truncated_properties[:MAX_SCENE_NODE_PROPERTIES],
         }
 
     def scene_patch(self, path: str, node: str, property_name: str, value: str, *, dry_run: bool = True) -> dict[str, Any]:
