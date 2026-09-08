@@ -2,6 +2,8 @@
 
 `godot-dev-mcp` 是一個安全、可組合的 Godot MCP（Model Context Protocol）閘道。第 2 版維持三個清楚邊界：
 
+伺服器使用標準 MCP stdio transport：每行一個 UTF-8 JSON-RPC 訊息，支援 request、notification 與 batch，且 stdout 不輸出非協定內容。
+
 - **AUTHOR**：檢查 scene、node、resource、signal、script，並以預設 dry-run 的受控操作修改場景屬性。
 - **OBSERVE**：只在 loopback 上提供唯讀 runtime tree、Node property、效能 monitor、log ring buffer 與 screenshot。
 - **VERIFY**：只執行 `godot-dev-mcp.json` 明確允許的命令，並解析 Stagehand exit code、JUnit 與 visual diff。

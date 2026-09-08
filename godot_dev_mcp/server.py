@@ -67,7 +67,9 @@ def dispatch(tools: GodotTools, message: dict[str, Any]) -> dict[str, Any] | Non
     if not isinstance(message, dict):
         return response(None, error={"code": -32600, "message": "Invalid Request"})
     method, request_id = message.get("method"), message.get("id")
-    if method == "notifications/initialized":
+    if message.get("jsonrpc") != "2.0" or not isinstance(method, str):
+        return response(request_id, error={"code": -32600, "message": "Invalid Request"})
+    if "id" not in message:
         return None
     if method == "initialize":
         return response(request_id, {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "godot-dev-mcp", "version": "0.2.0"}})
@@ -112,6 +114,15 @@ def dispatch(tools: GodotTools, message: dict[str, Any]) -> dict[str, Any] | Non
         return response(request_id, {"content": [{"type": "text", "text": str(exc)}], "isError": True})
 
 
+def dispatch_message(tools: GodotTools, message: Any) -> dict[str, Any] | list[dict[str, Any]] | None:
+    if not isinstance(message, list):
+        return dispatch(tools, message)
+    if not message:
+        return response(None, error={"code": -32600, "message": "Invalid Request"})
+    results = [result for item in message if (result := dispatch(tools, item)) is not None]
+    return results or None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True, type=Path)
@@ -120,7 +131,7 @@ def main() -> None:
     tools = GodotTools(args.project, args.bridge_url)
     for line in sys.stdin:
         try:
-            result = dispatch(tools, json.loads(line))
+            result = dispatch_message(tools, json.loads(line))
             if result is not None:
                 print(json.dumps(result, separators=(",", ":")), flush=True)
         except json.JSONDecodeError as exc:
