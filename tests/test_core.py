@@ -36,6 +36,15 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(result["resource_count"], 1)
         self.assertEqual(result["connection_count"], 1)
         self.assertEqual(result["scripts"], ["res://state.gd"])
+        self.assertEqual(result["structured_nodes"][0]["scene_path"], "Main")
+        self.assertEqual(result["structured_nodes"][1]["scene_path"], "Main/Label")
+
+        selected = self.tools.scene_inspect("main.tscn", "Main/Label")["selected_node"]
+        self.assertEqual(selected["type"], "Label")
+        self.assertEqual(selected["parent"], ".")
+        self.assertEqual(selected["properties"], {"text": '"Old"'})
+        with self.assertRaises(ToolError):
+            self.tools.scene_inspect("main.tscn", "Missing")
 
     def test_scene_patch_dry_run_and_apply(self):
         result = self.tools.scene_patch("main.tscn", "Label", "text", '"New"')

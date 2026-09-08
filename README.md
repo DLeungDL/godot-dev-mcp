@@ -100,6 +100,8 @@ Runtime Observer 使用 Godot 自訂 `Logger` 擷取引擎訊息、`push_warning
 
 `godot_scene_patch` 的 `dry_run` 預設為 `true`。只有明確傳入 `false` 才會寫入單一 `.tscn` property；回傳結果包含 before／after 變更摘要。
 
+`godot_scene_inspect` 會回傳有界限的 `structured_nodes`，包含節點名稱、型別、parent、scene path 與最多 100 個 property。傳入選用的 `node` selector，可依名稱或 scene path 精確取得 `selected_node`；名稱不唯一時必須改用完整路徑。
+
 `godot_runtime_snapshot` 回傳深度優先的平面 `nodes` 頁面與 `pagination`：
 
 - 預設 `limit=100`，最大 `500`

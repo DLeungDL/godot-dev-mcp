@@ -19,7 +19,7 @@ def _tool(name: str, description: str, properties: dict[str, Any] | None = None,
 TIMEOUT = {"timeout": {"type": "integer", "minimum": 1, "maximum": 900}}
 CORE_TOOLS = [
     _tool("godot_project_info", "Inspect the configured Godot project."),
-    _tool("godot_scene_inspect", "Inspect nodes, resources, scripts, and signals in a project scene.", {"path": {"type": "string"}}, ["path"]),
+    _tool("godot_scene_inspect", "Inspect structured nodes, resources, scripts, and signals in a project scene.", {"path": {"type": "string"}, "node": {"type": "string"}}, ["path"]),
     _tool("godot_scene_patch", "Preview or apply one controlled scene property change; dry-run defaults to true.", {"path": {"type": "string"}, "node": {"type": "string"}, "property": {"type": "string"}, "value": {"type": "string"}, "dry_run": {"type": "boolean", "default": True}}, ["path", "node", "property", "value"]),
     _tool("godot_resource_inspect", "Inspect a project resource without modifying it.", {"path": {"type": "string"}}, ["path"]),
     _tool("godot_script_diagnostics", "Return bounded static diagnostics for a GDScript or C# file.", {"path": {"type": "string"}}, ["path"]),
@@ -85,7 +85,7 @@ def dispatch(tools: GodotTools, message: dict[str, Any]) -> dict[str, Any] | Non
     try:
         handlers: dict[str, Callable[[], Any]] = {
             "godot_project_info": tools.project_info,
-            "godot_scene_inspect": lambda: tools.scene_inspect(arguments["path"]),
+            "godot_scene_inspect": lambda: tools.scene_inspect(arguments["path"], arguments.get("node")),
             "godot_scene_patch": lambda: tools.scene_patch(arguments["path"], arguments["node"], arguments["property"], arguments["value"], dry_run=arguments.get("dry_run", True)),
             "godot_resource_inspect": lambda: tools.resource_inspect(arguments["path"]),
             "godot_script_diagnostics": lambda: tools.script_diagnostics(arguments["path"]),
