@@ -1,5 +1,8 @@
 # godot-dev-mcp
 
+> [!IMPORTANT]
+> 本儲存庫已封存並停止維護。本專案已由 [Swallowtail](https://github.com/regiellis/godot-mcp-go) 取代；後者是目前採用的 Godot CLI、Editor、執行期自動化、測試與 MCP 工作流程。本程式碼僅保留作歷史參考。
+
 [![CI](https://github.com/DLeungDL/godot-dev-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/DLeungDL/godot-dev-mcp/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.2.0-informational.svg)](https://github.com/DLeungDL/godot-dev-mcp)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg)](https://www.python.org/downloads/)

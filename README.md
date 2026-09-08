@@ -1,5 +1,8 @@
 # godot-dev-mcp
 
+> [!IMPORTANT]
+> This repository is archived and no longer maintained. The project was superseded by [Swallowtail](https://github.com/regiellis/godot-mcp-go), which provides the adopted Godot CLI, Editor, runtime automation, testing, and MCP workflow. This code remains available for historical reference only.
+
 [![CI](https://github.com/DLeungDL/godot-dev-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/DLeungDL/godot-dev-mcp/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.2.0-informational.svg)](https://github.com/DLeungDL/godot-dev-mcp)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg)](https://www.python.org/downloads/)
