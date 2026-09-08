@@ -37,6 +37,8 @@ cwd = "C:\\path\\to\\godot-dev-mcp"
 
 `godot_scene_patch` 的 `dry_run` 預設為 `true`。只有明確傳入 `false` 才會寫入單一 `.tscn` property，回傳值包含 before/after 變更摘要。
 
+`godot_runtime_snapshot` 回傳深度優先的平面 `nodes` 頁面與 `pagination`。預設 `limit=100`、最大 `500`；使用 `next_offset` 取得下一頁，並可用 `max_depth`（最大 `16`）限制巡覽深度。這可避免大型 Editor／runtime tree 產生無界限回應。
+
 ## 專案設定
 
 參考 [`examples/godot-dev-mcp.example.json`](examples/godot-dev-mcp.example.json)。目標專案使用 `godot-dev-mcp.json`；命令以 argument array 直接啟動，不經 shell，timeout 上限為 900 秒。

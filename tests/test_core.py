@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from godot_dev_mcp.core import GodotTools, ToolError
 from godot_dev_mcp.server import CORE_TOOLS, dispatch
@@ -105,6 +106,16 @@ class CoreTests(unittest.TestCase):
         names = {tool["name"] for tool in listed["result"]["tools"]}
         self.assertNotIn("gs_test_auction", names)
         self.assertTrue({"godot_runtime_errors", "godot_validate_autoload"} <= names)
+
+    def test_runtime_snapshot_forwards_bounded_pagination(self):
+        with patch.object(self.tools, "_bridge_json", return_value={"nodes": []}) as bridge:
+            self.tools.runtime_snapshot(["fps"], offset=20, limit=25, max_depth=4)
+        bridge.assert_called_once_with("/snapshot", {
+            "offset": "20", "limit": "25", "max_depth": "4", "monitors": "fps"
+        })
+        for kwargs in ({"offset": -1}, {"limit": 0}, {"limit": 501}, {"max_depth": 17}):
+            with self.assertRaises(ToolError):
+                self.tools.runtime_snapshot(**kwargs)
 
     def test_grand_sire_tools_are_opt_in(self):
         (self.root / "godot-dev-mcp.json").write_text(json.dumps({"extensions": ["grand_sire"], "checks": {}}), encoding="utf-8")
