@@ -23,6 +23,7 @@ class CoreTests(unittest.TestCase):
             '[ext_resource path="res://state.gd" type="Script" id="1"]\n\n'
             '[node name="Main" type="Node"]\nscript = ExtResource("1")\n'
             '[node name="Label" type="Label" parent="."]\ntext = "Old"\n'
+            'metadata/config = {\n"enabled": true,\n"items": [1, 2]\n}\n'
             '[connection signal="ready" from="." to="." method="_ready"]\n', encoding="utf-8"
         )
         self.tools = GodotTools(self.root)
@@ -42,9 +43,38 @@ class CoreTests(unittest.TestCase):
         selected = self.tools.scene_inspect("main.tscn", "Main/Label")["selected_node"]
         self.assertEqual(selected["type"], "Label")
         self.assertEqual(selected["parent"], ".")
-        self.assertEqual(selected["properties"], {"text": '"Old"'})
+        self.assertEqual(selected["properties"]["text"], '"Old"')
+        self.assertEqual(selected["properties"]["metadata/config"], '{\n"enabled": true,\n"items": [1, 2]\n}')
+        self.assertFalse(selected["properties_truncated"])
         with self.assertRaises(ToolError):
             self.tools.scene_inspect("main.tscn", "Missing")
+
+    def test_scene_inspection_bounds_large_property_values(self):
+        scene = self.root / "main.tscn"
+        contents = scene.read_text(encoding="utf-8")
+        large_properties = "".join(f'large_{index} = "{"x" * 5000}"\n' for index in range(9))
+        contents = contents.replace("[connection ", large_properties + "[connection ")
+        scene.write_text(contents, encoding="utf-8")
+        selected = self.tools.scene_inspect("main.tscn", "Main/Label")["selected_node"]
+        self.assertEqual(len(selected["properties"]["large_0"]), 4096)
+        self.assertTrue(selected["properties_truncated"])
+        self.assertIn("large_0", selected["truncated_properties"])
+        self.assertIn("large_8", selected["truncated_properties"])
+        self.assertNotIn("large_8", selected["properties"])
+        self.assertEqual(selected["property_chars"], 32768)
+
+    def test_scene_inspection_bounds_total_property_payload(self):
+        lines = ['[node name="Root" type="Node"]']
+        for node_index in range(5):
+            lines.append(f'[node name="Node{node_index}" type="Node" parent="."]')
+            for property_index in range(8):
+                lines.append(f'data_{property_index} = "{"x" * 5000}"')
+
+        nodes = GodotTools._structured_scene_nodes(lines)
+        self.assertEqual(sum(node["property_chars"] for node in nodes), 131072)
+        self.assertEqual(nodes[-1]["properties"], {})
+        self.assertTrue(nodes[-1]["properties_truncated"])
+        self.assertEqual(len(nodes[-1]["truncated_properties"]), 8)
 
     def test_scene_patch_dry_run_and_apply(self):
         result = self.tools.scene_patch("main.tscn", "Label", "text", '"New"')
