@@ -1,0 +1,10 @@
+; Minimal project used to validate the editor plugin with Godot 4.7 Mono.
+config_version=5
+
+[application]
+
+config/name="godot-dev-mcp"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_dev_mcp/plugin.cfg")

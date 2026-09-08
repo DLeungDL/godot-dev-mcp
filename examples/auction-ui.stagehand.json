@@ -1,0 +1,32 @@
+{
+  "name": "auction-ui",
+  "description": "The Auction scene loads, refreshes, and displays its horse list.",
+  "target": {
+    "mode": "launch",
+    "project_path": "../grand-sire",
+    "headless": false,
+    "timeout_ms": 60000
+  },
+  "steps": [
+    {
+      "name": "auction appears",
+      "action": "wait_for_node",
+      "with": {"selector": "name:Auction", "timeout_ms": 15000}
+    },
+    {
+      "name": "refresh auction",
+      "action": "click",
+      "with": {"selector": "name:RefreshButton"}
+    },
+    {
+      "name": "horse list is visible",
+      "action": "assert_property",
+      "with": {"selector": "name:HorseList", "property": "visible", "operator": "equals", "expected": true}
+    },
+    {
+      "name": "auction-ui",
+      "action": "screenshot_diff",
+      "with": {"threshold": 0.01}
+    }
+  ]
+}

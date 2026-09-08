@@ -1,0 +1,14 @@
+{
+  "extensions": ["grand_sire"],
+  "checks": {
+    "auction": ["godot", "--headless", "--path", ".", "--script", "res://tests/smoke_ui.gd"],
+    "m2": ["godot", "--headless", "--path", ".", "--script", "res://tests/run_m2_headless.gd"],
+    "pvp": ["dotnet", "test", "--filter", "LocalPvp"],
+    "replay_determinism": ["godot", "--headless", "--path", ".", "--script", "res://tests/check_replay_determinism.gd"]
+  },
+  "stagehand": {
+    "command": ["godot-stagehand", "run", "--out-dir", "stagehand-artifacts"],
+    "junit": "stagehand-artifacts/junit.xml",
+    "report": "stagehand-artifacts/report.json"
+  }
+}
