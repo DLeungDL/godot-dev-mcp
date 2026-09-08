@@ -108,14 +108,19 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("gs_test_auction", names)
         self.assertTrue({"godot_runtime_errors", "godot_validate_autoload"} <= names)
 
-    def test_mcp_batch_omits_notification_responses(self):
+    def test_mcp_batch_executes_notifications_without_responding(self):
         result = dispatch_message(self.tools, [
             {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "method": "tools/call", "params": {
+                "name": "godot_scene_patch",
+                "arguments": {"path": "main.tscn", "node": "Label", "property": "text", "value": '"Notification"', "dry_run": False},
+            }},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         ])
         self.assertIsInstance(result, list)
         self.assertEqual([item["id"] for item in result], [1, 2])
+        self.assertIn('text = "Notification"', (self.root / "main.tscn").read_text(encoding="utf-8"))
         self.assertIsNone(dispatch_message(self.tools, [
             {"jsonrpc": "2.0", "method": "notifications/cancelled"}
         ]))
@@ -177,11 +182,19 @@ class MCPStdioIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
             (project / "project.godot").write_text('[application]\nconfig/name="stdio-test"\n', encoding="utf-8")
+            scene = project / "main.tscn"
+            scene.write_text('[gd_scene format=3]\n\n[node name="Main" type="Node"]\n', encoding="utf-8")
             requests = [
                 {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
                     "protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}
                 }},
                 {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                {"jsonrpc": "2.0", "method": "tools/call", "params": {
+                    "name": "godot_scene_patch", "arguments": {
+                        "path": "main.tscn", "node": "Main", "property": "process_mode",
+                        "value": "3", "dry_run": False,
+                    }
+                }},
                 {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
                 {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {
                     "name": "godot_project_info", "arguments": {}
@@ -199,6 +212,7 @@ class MCPStdioIntegrationTests(unittest.TestCase):
                 timeout=10,
                 check=False,
             )
+            scene_text = scene.read_text(encoding="utf-8")
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stderr, "")
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
@@ -209,6 +223,7 @@ class MCPStdioIntegrationTests(unittest.TestCase):
         self.assertEqual(project_info["config_preview"], '[application]\nconfig/name="stdio-test"\n')
         self.assertEqual(responses[3]["error"]["code"], -32601)
         self.assertEqual(responses[4]["error"]["code"], -32700)
+        self.assertIn("process_mode = 3", scene_text)
 
 
 if __name__ == "__main__":
