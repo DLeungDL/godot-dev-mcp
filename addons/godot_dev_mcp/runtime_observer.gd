@@ -1,5 +1,4 @@
-@tool
-extends EditorPlugin
+extends Node
 
 const MAX_LOG_ENTRIES: int = 500
 const DEFAULT_SNAPSHOT_LIMIT: int = 100
@@ -7,8 +6,6 @@ const MAX_SNAPSHOT_LIMIT: int = 500
 const DEFAULT_TREE_DEPTH: int = 8
 const MAX_TREE_DEPTH: int = 16
 const MAX_SNAPSHOT_OFFSET: int = 100000
-const RUNTIME_AUTOLOAD_NAME: String = "GodotDevMCPRuntimeObserver"
-const RUNTIME_AUTOLOAD_PATH: String = "res://addons/godot_dev_mcp/runtime_observer.gd"
 const MONITORS: Dictionary = {
 	"fps": Performance.TIME_FPS,
 	"process_ms": Performance.TIME_PROCESS,
@@ -23,42 +20,26 @@ const MONITORS: Dictionary = {
 var _server: TCPServer = TCPServer.new()
 var _clients: Array[StreamPeerTCP] = []
 var _logs: Array[Dictionary] = []
+var _port: int = 7332
 
 
-func _enter_tree() -> void:
-	_ensure_runtime_autoload()
-	var error: Error = _server.listen(7331, "127.0.0.1")
+func _ready() -> void:
+	if not OS.is_debug_build() and not bool(ProjectSettings.get_setting("godot_dev_mcp/allow_release_observer", false)):
+		queue_free()
+		return
+	_port = int(ProjectSettings.get_setting("godot_dev_mcp/runtime_port", 7332))
+	var error: Error = _server.listen(_port, "127.0.0.1")
 	if error != OK:
-		_log("error", "godot-dev-mcp observer failed to listen on 127.0.0.1:7331")
-		push_error("godot-dev-mcp observer failed to listen on 127.0.0.1:7331")
+		_log("error", "godot-dev-mcp runtime observer failed to listen on 127.0.0.1:%d" % _port)
+		push_error("godot-dev-mcp runtime observer failed to listen on 127.0.0.1:%d" % _port)
 	else:
-		_log("info", "godot-dev-mcp observer listening on 127.0.0.1:7331")
+		_log("info", "godot-dev-mcp runtime observer listening on 127.0.0.1:%d" % _port)
 	set_process(true)
 
 
 func _exit_tree() -> void:
 	_server.stop()
 	_clients.clear()
-
-
-func _disable_plugin() -> void:
-	var setting: String = "autoload/" + RUNTIME_AUTOLOAD_NAME
-	if ProjectSettings.has_setting(setting):
-		ProjectSettings.set_setting(setting, null)
-		var save_error: Error = ProjectSettings.save()
-		if save_error != OK:
-			push_error("godot-dev-mcp failed to remove runtime observer autoload")
-
-
-func _ensure_runtime_autoload() -> void:
-	var setting: String = "autoload/" + RUNTIME_AUTOLOAD_NAME
-	var expected: String = "*" + RUNTIME_AUTOLOAD_PATH
-	if str(ProjectSettings.get_setting(setting, "")) == expected:
-		return
-	ProjectSettings.set_setting(setting, expected)
-	var save_error: Error = ProjectSettings.save()
-	if save_error != OK:
-		push_error("godot-dev-mcp failed to install runtime observer autoload")
 
 
 func _process(_delta: float) -> void:
@@ -88,7 +69,7 @@ func _respond(client: StreamPeerTCP, request: String) -> void:
 	var query: Dictionary = _parse_query(target.get_slice("?", 1) if target.contains("?") else "")
 	match path:
 		"/health":
-			_send_json(client, "200 OK", {"ok": true, "service": "godot-dev-mcp-observer", "version": "0.2.0", "read_only": true})
+			_send_json(client, "200 OK", {"ok": true, "service": "godot-dev-mcp-runtime-observer", "version": "0.2.0", "scope": "game", "read_only": true, "port": _port})
 		"/snapshot":
 			_send_json(client, "200 OK", _snapshot(
 				str(query.get("monitors", "")),
@@ -99,7 +80,7 @@ func _respond(client: StreamPeerTCP, request: String) -> void:
 		"/property":
 			_send_json(client, "200 OK", _property(str(query.get("node", "")), str(query.get("property", ""))))
 		"/logs":
-			_send_json(client, "200 OK", {"entries": _logs.duplicate(true), "capacity": MAX_LOG_ENTRIES})
+			_send_json(client, "200 OK", {"entries": _logs.duplicate(true), "capacity": MAX_LOG_ENTRIES, "scope": "game"})
 		"/screenshot":
 			_send_screenshot(client)
 		_:
@@ -111,9 +92,7 @@ func _parse_query(encoded: String) -> Dictionary:
 	for pair: String in encoded.split("&", false):
 		var separator: int = pair.find("=")
 		if separator >= 0:
-			var key: String = pair.substr(0, separator).uri_decode()
-			var value: String = pair.substr(separator + 1).uri_decode()
-			result[key] = value
+			result[pair.substr(0, separator).uri_decode()] = pair.substr(separator + 1).uri_decode()
 	return result
 
 
@@ -145,7 +124,8 @@ func _snapshot(requested_monitors: String, offset: int, limit: int, max_depth: i
 	var page: Dictionary = _node_page(root, offset, limit, max_depth)
 	return {
 		"schema_version": 2,
-		"editor": Engine.is_editor_hint(),
+		"editor": false,
+		"scope": "game",
 		"read_only": true,
 		"monitors": values,
 		"root": {"name": root.name, "type": root.get_class(), "path": str(root.get_path())},
@@ -158,7 +138,8 @@ func _snapshot(requested_monitors: String, offset: int, limit: int, max_depth: i
 func _property(node_path: String, property_name: String) -> Dictionary:
 	if node_path.is_empty() or property_name.is_empty() or not node_path.begins_with("/"):
 		return {"ok": false, "error": "rooted node and property are required"}
-	var node: Node = get_tree().root.get_node_or_null(NodePath(node_path.trim_prefix("/root/")))
+	var relative_path: String = node_path.trim_prefix("/root/")
+	var node: Node = get_tree().root if node_path == "/root" else get_tree().root.get_node_or_null(NodePath(relative_path))
 	if node == null:
 		return {"ok": false, "error": "node not found", "node": node_path}
 	var allowed: bool = false
@@ -168,7 +149,7 @@ func _property(node_path: String, property_name: String) -> Dictionary:
 			break
 	if not allowed:
 		return {"ok": false, "error": "property unavailable or script-defined"}
-	return {"ok": true, "node": node_path, "property": property_name, "value": _safe_value(node.get(property_name))}
+	return {"ok": true, "node": node_path, "property": property_name, "value": _safe_value(node.get(property_name)), "scope": "game"}
 
 
 func _safe_value(value: Variant) -> Variant:
@@ -211,13 +192,7 @@ func _node_page(root: Node, offset: int, limit: int, max_depth: int) -> Dictiona
 			if nodes.size() >= limit:
 				has_more = true
 				break
-			nodes.append({
-				"name": node.name,
-				"type": node.get_class(),
-				"path": str(node.get_path()),
-				"depth": depth,
-				"child_count": node.get_child_count(),
-			})
+			nodes.append({"name": node.name, "type": node.get_class(), "path": str(node.get_path()), "depth": depth, "child_count": node.get_child_count()})
 		seen += 1
 		if depth < max_depth:
 			var children: Array[Node] = []
@@ -225,17 +200,9 @@ func _node_page(root: Node, offset: int, limit: int, max_depth: int) -> Dictiona
 				children.append(child)
 			for index: int in range(children.size() - 1, -1, -1):
 				stack.append({"node": children[index], "depth": depth + 1})
-	var next_offset: Variant = offset + nodes.size() if has_more else null
 	return {
 		"nodes": nodes,
-		"pagination": {
-			"offset": offset,
-			"limit": limit,
-			"returned": nodes.size(),
-			"max_depth": max_depth,
-			"has_more": has_more,
-			"next_offset": next_offset,
-		},
+		"pagination": {"offset": offset, "limit": limit, "returned": nodes.size(), "max_depth": max_depth, "has_more": has_more, "next_offset": offset + nodes.size() if has_more else null},
 	}
 
 

@@ -125,6 +125,17 @@ class CoreTests(unittest.TestCase):
                                            "gs_run_replay_determinism", "gs_runtime_errors",
                                            "gs_resource_leaks", "gs_validate_scene", "gs_validate_autoload"})
 
+    def test_runtime_observer_addon_contract_is_packaged(self):
+        repository = Path(__file__).resolve().parents[1]
+        runtime_script = repository / "addons" / "godot_dev_mcp" / "runtime_observer.gd"
+        self.assertTrue(runtime_script.is_file())
+        runtime_source = runtime_script.read_text(encoding="utf-8")
+        self.assertIn('_server.listen(_port, "127.0.0.1")', runtime_source)
+        self.assertIn('"scope": "game"', runtime_source)
+        self.assertIn("OS.is_debug_build()", runtime_source)
+        project = (repository / "project.godot").read_text(encoding="utf-8")
+        self.assertIn('GodotDevMCPRuntimeObserver="*res://addons/godot_dev_mcp/runtime_observer.gd"', project)
+
 
 if __name__ == "__main__":
     unittest.main()

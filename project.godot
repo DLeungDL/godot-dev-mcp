@@ -1,9 +1,14 @@
-; Minimal project used to validate the editor plugin with Godot 4.7 Mono.
+; Minimal project used to validate the plugin with Godot 4.7 Mono.
 config_version=5
 
 [application]
 
 config/name="godot-dev-mcp"
+run/main_scene="res://tests/runtime_fixture.tscn"
+
+[autoload]
+
+GodotDevMCPRuntimeObserver="*res://addons/godot_dev_mcp/runtime_observer.gd"
 
 [editor_plugins]
 
