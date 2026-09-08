@@ -1,17 +1,17 @@
 [project]
-name = "grand-sire-dev-mcp"
-version = "0.1.0"
-description = "A small, dependency-free MCP gateway for Grand Sire Godot development"
+name = "godot-dev-mcp"
+version = "0.2.0"
+description = "A safe MCP gateway for Godot authoring, observation, and verification"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 
 [project.scripts]
-grand-sire-dev-mcp = "gs_mcp.server:main"
+godot-dev-mcp = "godot_dev_mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["gs_mcp*"]
+include = ["godot_dev_mcp*"]
 
